@@ -5,13 +5,6 @@ import streamlit as st
 load_dotenv()
 from openai import OpenAI
 
-
-def handle_exception(exc):
-    st.error(f"发生未预期错误：{exc}")
-
-
-st.set_exception_handler(handle_exception)
-
 PROVIDERS = {
     "智谱AI": {
         "base_url": "https://open.bigmodel.cn/api/paas/v4/",
