@@ -5,6 +5,13 @@ import streamlit as st
 load_dotenv()
 from openai import OpenAI
 
+
+def handle_exception(exc):
+    st.error(f"发生未预期错误：{exc}")
+
+
+st.set_exception_handler(handle_exception)
+
 PROVIDERS = {
     "智谱AI": {
         "base_url": "https://open.bigmodel.cn/api/paas/v4/",
@@ -74,11 +81,21 @@ BASE_PROMPT = """你是一个专业的文档摘要助手。
 【建议】结论或后续建议
 """
 
-STYLE_INSTRUCTIONS = {
-    "标准": "请按上述结构输出，每部分篇幅适中，覆盖核心信息。",
-    "简要": "请按上述结构输出，但每部分限制为1-2句话，只保留最核心信息。不适用当前文档类型的【】可跳过。",
-    "详细": "请按上述结构输出，尽可能详细，包含关键数据、引文和具体细节。如内容需要可适当扩展或增加子段。",
-}
+
+
+MAX_TEXT_LENGTH = 100000
+MAX_FILE_SIZE = 50 * 1024 * 1024
+
+
+def truncate_text(text, limit=MAX_TEXT_LENGTH):
+    if len(text) > limit:
+        st.warning(f"文本过长（{len(text)} 字符），已截断至前 {limit} 字符")
+        return text[:limit]
+    return text
+
+
+def is_valid_url(url):
+    return url.startswith(("http://", "https://")) and "." in url
 
 
 def get_zhipu_key():
@@ -143,7 +160,7 @@ def call_llm(client, text, system_prompt, model_name, provider_config):
         )
         if provider_config["supports_thinking"]:
             kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
-        resp = client.chat.completions.create(**kwargs)
+        resp = client.chat.completions.create(timeout=30, **kwargs)
         return resp.choices[0].message.content
     except Exception as e:
         st.error(f"API 调用失败：{e}")
@@ -157,8 +174,6 @@ if "summary" not in st.session_state:
     st.session_state.summary = None
 if "summary_tab" not in st.session_state:
     st.session_state.summary_tab = None
-if "last_style" not in st.session_state:
-    st.session_state.last_style = None
 
 with st.sidebar:
     st.header("使用说明")
@@ -168,13 +183,6 @@ with st.sidebar:
 - AI 会自动识别文档类型，选用最合适的摘要结构
         """
     )
-    st.markdown("---")
-    style = st.radio("摘要风格", ["标准", "简要", "详细"], horizontal=True)
-    if st.session_state.last_style and st.session_state.last_style != style:
-        st.session_state.summary = None
-        st.session_state.summary_tab = None
-        st.rerun()
-    st.session_state.last_style = style
     st.markdown("---")
 
     with st.popover("⚙️ 模型配置"):
@@ -209,15 +217,16 @@ with st.sidebar:
     client = OpenAI(api_key=api_key, base_url=pconf["base_url"])
     st.caption(f"当前: {resolved_provider} · {cfg_model}")
 
-system_prompt = BASE_PROMPT + STYLE_INSTRUCTIONS[style]
+system_prompt = BASE_PROMPT
 
 tab1, tab2, tab3 = st.tabs(["📄 粘贴文本", "📁 上传文件", "🔗 输入网址"])
 
 with tab1:
     user_input = st.text_area("把你要总结的文本粘贴到这里：", height=250)
     if st.button("✨ 生成摘要") and user_input.strip():
+        text = truncate_text(user_input)
         with st.spinner("AI 正在阅读并总结..."):
-            summary = call_llm(client, user_input, system_prompt, cfg_model, pconf)
+            summary = call_llm(client, text, system_prompt, cfg_model, pconf)
         if summary:
             st.session_state.summary = summary
             st.session_state.summary_tab = "paste"
@@ -230,9 +239,13 @@ with tab1:
 with tab2:
     uploaded_file = st.file_uploader("选择文件", type=["txt", "pdf", "docx"])
     if uploaded_file is not None:
+        if uploaded_file.size > MAX_FILE_SIZE:
+            st.error("文件超过 50MB 限制，请选择较小的文件")
+            st.stop()
         file_content = read_file_content(uploaded_file)
         if file_content.strip():
-            st.code(file_content[:2000], language="text")
+            with st.expander("📄 文件预览", expanded=False):
+                st.code(file_content[:2000], language="text")
             if st.button("✨ 摘要此文件"):
                 with st.spinner("AI 正在阅读并总结..."):
                     summary = call_llm(client, file_content, system_prompt, cfg_model, pconf)
@@ -248,6 +261,9 @@ with tab2:
 with tab3:
     url = st.text_input("输入网页链接：", placeholder="https://...")
     if st.button("✨ 摘要此网页") and url.strip():
+        if not is_valid_url(url.strip()):
+            st.error("请输入有效的网址（以 http:// 或 https:// 开头）")
+            st.stop()
         with st.spinner("正在获取网页内容..."):
             page_content = fetch_url_content(url)
         if page_content.strip():
