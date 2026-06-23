@@ -1,31 +1,54 @@
-# 📝 智能文档摘要工具
+# 📄 智能文档摘要工具
 
-基于 **Streamlit + OpenAI 兼容 API** 构建的多厂商、多格式智能文档摘要工具，支持自适应文档类型分析与结构化摘要输出。
+## 一句话描述
+支持多种 AI 厂商的多格式文档摘要工具，粘贴文本 / 上传文件 / 输入网址即可生成结构化摘要。
+
+## 要解决什么问题
+- 阅读长文档耗时，需要快速获取核心内容
+- 不同文档类型（论文/技术文档/会议记录等）需要不同的摘要结构
+- 不想局限于单一 AI 厂商，需要灵活切换
+
+## 目标用户
+- 需要快速理解长文档的任何用户
+- 学生、研究人员、职场人士
+
+## MVP 范围
+选择厂商/模型 → 输入文本/文件/URL → AI 自动识别类型 → 生成结构化摘要 → 下载结果
+
+## 技术方案
+- **Web 框架**：Streamlit（快速构建 AI 应用，一键部署）
+- **API 接入**：OpenAI Python SDK（兼容多厂商统一接口）
+- **文档解析**：PyMuPDF + python-docx + BeautifulSoup
 
 ## 功能特性
 
 - **多格式输入**：支持 TXT / PDF / DOCX 文件上传、文本粘贴、URL 抓取
 - **多厂商支持**：智谱AI / DeepSeek / 阿里千问 / 字节豆包 / Kimi / 讯飞星火
 - **深度思考**：支持智谱、DeepSeek 等模型的深度推理模式
-- **自适应摘要**：AI 自动识别文档类型（小说/技术文档/会议/论文等），选用最合适的摘要结构
-- **用户自定义**：可在界面中切换厂商、模型、API Key
+- **自适应摘要**：AI 自动识别文档类型，选用最合适的摘要结构
+- **流式输出**：实时显示摘要生成过程
 - **结果导出**：支持 Markdown / TXT 格式下载
 
-## 技术栈
+## 架构图
 
-| 组件 | 技术 |
-|---|---|
-| Web 框架 | Streamlit |
-| API 接入 | OpenAI Python SDK（兼容多厂商） |
-| PDF 解析 | PyMuPDF |
-| DOCX 解析 | python-docx |
-| URL 抓取 | requests + BeautifulSoup |
+```mermaid
+flowchart TD
+    UI[Streamlit UI] --> TAB1[粘贴文本]
+    UI --> TAB2[上传文件]
+    UI --> TAB3[输入网址]
+    TAB2 --> PARSER[文件解析器<br/>PyMuPDF / python-docx]
+    TAB3 --> FETCHER[URL 抓取器<br/>requests + BeautifulSoup]
+    TAB1 & PARSER & FETCHER --> LLM[LLM 调用层<br/>OpenAI SDK]
+    LLM --> PROVIDERS[多厂商支持<br/>智谱/DeepSeek/Qwen/豆包/Kimi/星火]
+    PROVIDERS --> OUTPUT[流式输出 → 摘要展示 → 下载]
+```
 
 ## 本地运行
 
 ```bash
 # 1. 安装依赖
 pip install -r requirements.txt
+pip install -r requirements-dev.txt  # 测试依赖（可选）
 
 # 2. 创建环境变量文件 .env
 ZHIPUAI_API_KEY=your_api_key_here
@@ -48,13 +71,21 @@ streamlit run app.py
 
 ```
 智能文档摘要工具/
-├── app.py              # 主程序（Streamlit UI + 业务逻辑）
-├── requirements.txt    # 依赖声明
+├── app.py              # Streamlit UI 主程序
+├── consts.py           # 厂商配置 + Prompt 模板
+├── utils.py            # 工具函数（文件/URL/LLM调用）
+├── tests/              # 测试套件
+│   ├── test_utils.py
+│   └── test_llm.py
+├── requirements.txt    # 运行时依赖
+├── requirements-dev.txt# 测试依赖
 ├── .env                # 本地开发环境变量（不上传）
 ├── .gitignore          # Git 忽略规则
+├── PRD.md              # 产品需求文档
+├── 产品开发全流程指南.md # 开发流程参考
 ├── .streamlit/
 │   └── secrets.toml    # 部署用模板
-└── README.md
+└── readme.md
 ```
 
 ## 支持的厂商及接入地址
